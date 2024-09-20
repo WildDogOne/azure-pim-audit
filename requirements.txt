@@ -1,3 +1,6 @@
 azure-identity
 azure-mgmt-authorization
 tabulate
+msgraph-sdk
+atlassian-python-api
+pandas
