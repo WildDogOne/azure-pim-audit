@@ -1,0 +1,9 @@
+# Confluence Config
+confluence_url = "https://confluence.company.server"
+confluence_token = "XXXXXX"
+confluence_page_id = "123456"
+
+# Azure Config
+azure_tenant_id = "XXX"  # Paste your own tenant ID here
+azure_client_id = "XXX"  # Paste your own app ID here
+azure_client_secret = "XXX"  # Paste your own app secret here
