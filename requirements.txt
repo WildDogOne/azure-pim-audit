@@ -4,3 +4,4 @@ tabulate
 msgraph-sdk
 atlassian-python-api
 pandas
+lxml

@@ -2,6 +2,7 @@ import pandas as pd
 import datetime
 from datetime import datetime
 from atlassian import Confluence
+import json
 
 
 def bulletpointer(data):
@@ -113,9 +114,15 @@ def cleanup_children(
         print(f"Removing {child['title']}")
         confluence.remove_page(child["id"], status=None, recursive=False)
 
+
 def get_childid(confluence=None, confluence_page_id=None, sub_page_name=None):
     children = confluence.get_page_child_by_type(confluence_page_id, type="page")
     for child in children:
         if child["title"] == sub_page_name:
             return child["id"]
     return None
+
+
+def get_tables(confluence=None, confluence_page_id=None):
+    tables = confluence.get_tables_from_page(confluence_page_id)
+    return json.loads(tables)
