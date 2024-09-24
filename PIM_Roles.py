@@ -22,7 +22,7 @@ from functions.functions import (
     check_new_mappings,
     check_removed_mappings,
 )
-from pprint import pprint
+
 
 from functions.msgraphapi import GraphAPI
 from functions.log_config import logger
@@ -37,22 +37,28 @@ async def main():
     confluence = Confluence(url=confluence_url, token=confluence_token)
 
     # Get all Current Role Assignments from Azure PIM
+    logger.info("Getting Role Assignments from Azure PIM")
     assignment_dict = await get_assignments(graph_client)
     # Convert the results to a usable table
+    logger.info("Building User Array")
     user_array = build_user_array(assignment_dict)
     # Get Currently Documented Role Mappings
+    logger.info("Getting Documented Role Mappings")
     role_mappings, headers = get_documented_mappings(
         confluence, confluence_page_id, confluence_entraid_page_name
     )
     # Check for new mappings
+    logger.info("Checking for new mappings")
     role_mappings = check_new_mappings(user_array, role_mappings, headers)
     # Remove mappings that are not in the export
+    logger.info("Checking for removed mappings")
     role_mappings = check_removed_mappings(user_array, role_mappings)
 
     # Sort the mappings by user name
     role_mappings = sorted(
         role_mappings, key=lambda x: (x["Benutzer"], x["Rolle"]), reverse=False
     )
+    logger.info("Updating Confluence Page")
     confluence_update_page(
         confluence=confluence,
         title=confluence_entraid_page_name,
@@ -60,8 +66,6 @@ async def main():
         table=role_mappings,
         representation="storage",
         full_width=False,
-        # body_header=body,
-        # body_footer="footer",
         escape_table=True,
     )
 
