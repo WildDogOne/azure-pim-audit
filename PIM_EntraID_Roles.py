@@ -12,6 +12,7 @@ from creds import (
 )
 from functions.confluence import (
     confluence_update_page,
+    style_text
 )
 from atlassian import Confluence
 
@@ -28,16 +29,9 @@ from functions.msgraphapi import GraphAPI
 from functions.log_config import logger
 
 
-async def main():
-    graph_client = GraphAPI(
-        azure_tenant_id=azure_tenant_id,
-        azure_client_id=azure_client_id,
-        azure_client_secret=azure_client_secret,
-    )
-    confluence = Confluence(url=confluence_url, token=confluence_token)
-
-    # Get all Current Role Assignments from Azure PIM
-    logger.info("Getting Role Assignments from Azure PIM")
+async def process_entra_id(graph_client, confluence):
+    # Get all Current EntraID Role Assignments from Azure PIM
+    logger.info("Getting EntraID Role Assignments from Azure PIM")
     assignment_dict = await get_assignments(graph_client)
     # Convert the results to a usable table
     logger.info("Building User Array")
@@ -67,7 +61,19 @@ async def main():
         representation="storage",
         full_width=False,
         escape_table=True,
+        body_header=style_text("Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident", color="red", bold=True),
     )
+
+
+async def main():
+    graph_client = GraphAPI(
+        azure_tenant_id=azure_tenant_id,
+        azure_client_id=azure_client_id,
+        azure_client_secret=azure_client_secret,
+    )
+    confluence = Confluence(url=confluence_url, token=confluence_token)
+    await process_entra_id(graph_client, confluence)
+
 
 
 if __name__ == "__main__":

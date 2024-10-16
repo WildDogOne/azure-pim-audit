@@ -9,6 +9,7 @@ from functions.confluence import (
     get_tables,
 )
 
+
 async def get_assignments(pim):
     assignment_dict = {}
     assignments = await pim.get_role_eligibility_schedules()
@@ -109,12 +110,26 @@ def check_removed_mappings(user_array, role_mappings):
 def privileged_role_filter(role):
     privileged_groups = [
         "Application Administrator",
+        "Application Developer",
         "Authentication Administrator",
+        "Authentication Extensibility Administrator",
+        "B2C IEF Keyset Administrator",
+        "Cloud Application Administrator",
         "Cloud Device Administrator",
         "Conditional Access Administrator",
+        "Directory Writers",
+        "Domain Name Administrator",
+        "External Identity Provider Administrator",
         "Global Administrator",
         "Global Reader",
+        "Helpdesk Administrator",
+        "Hybrid Identity Administrator",
         "Intune Administrator",
+        "Lifecycle Workflows Administrator",
+        "Partner Tier1 Support",
+        "Partner Tier2 Support",
+        "Password Administrator",
+        "Privileged Authentication Administrator",
         "Privileged Role Administrator",
         "Security Administrator",
         "Security Operator",
