@@ -5,3 +5,4 @@ msgraph-sdk
 atlassian-python-api
 pandas
 lxml
+kestra

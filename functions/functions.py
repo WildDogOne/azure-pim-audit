@@ -71,6 +71,7 @@ def get_documented_mappings(confluence, confluence_page_id, sub_page_name):
 
 
 def check_new_mappings(user_array, role_mappings, headers):
+    changes = False
     for exported_role in user_array:
         mapped = False
         for existing_mapping in role_mappings:
@@ -86,10 +87,12 @@ def check_new_mappings(user_array, role_mappings, headers):
                     exported_role[header] = ""
             print(f"New mapping: {exported_role}")
             role_mappings.append(exported_role)
-    return role_mappings
+            changes = True
+    return role_mappings, changes
 
 
 def check_removed_mappings(user_array, role_mappings):
+    changes = False
     for existing_mapping in role_mappings:
         mapped = False
         for exported_role in user_array:
@@ -102,7 +105,8 @@ def check_removed_mappings(user_array, role_mappings):
         if not mapped:
             print(f"Mapping not found: {existing_mapping}")
             role_mappings.remove(existing_mapping)
-    return role_mappings
+            changes = True
+    return role_mappings, changes
 
 
 def privileged_role_filter(role):
