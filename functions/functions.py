@@ -101,8 +101,7 @@ def check_removed_mappings(user_array, role_mappings):
                 break
         if not mapped:
             print(f"Mapping not found: {existing_mapping}")
-            # TODO: Enable the following line to remove mappings that are not in the export
-            #role_mappings.remove(existing_mapping)
+            role_mappings.remove(existing_mapping)
     return role_mappings
 
 

@@ -37,11 +37,27 @@ class GraphAPI:
         request_configuration = RequestConfiguration(
             query_parameters=query_params,
         )
+        schedules = []
+        next_link = None
+        while True:
+            if next_link:
+                result = await self.graph_client.role_management.directory.role_eligibility_schedules.with_url(
+                    next_link
+                ).get(
+                    request_configuration=request_configuration
+                )
+            else:
+                result = await self.graph_client.role_management.directory.role_eligibility_schedules.get(
+                    request_configuration=request_configuration
+                )
 
-        result = await self.graph_client.role_management.directory.role_eligibility_schedules.get(
-            request_configuration=request_configuration
-        )
-        return result.value
+            schedules.extend(result.value)
+
+            next_link = result.odata_next_link
+            if not next_link:
+                break
+
+        return schedules
 
     async def get_group_members(self, group_id):
 
