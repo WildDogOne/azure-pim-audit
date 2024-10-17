@@ -1,5 +1,7 @@
 import json
-from functions.log_config import logger
+from kestra import Kestra
+logger = Kestra.logger()
+#from functions.log_config import logger
 from msgraph.generated.models.group import Group
 from functions.confluence import (
     confluence_update_page,

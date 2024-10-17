@@ -1,5 +1,6 @@
 from msgraph import GraphServiceClient
-
+from kestra import Kestra
+logger = Kestra.logger()
 from msgraph.generated.role_management.directory.role_eligibility_schedules.role_eligibility_schedules_request_builder import (
     RoleEligibilitySchedulesRequestBuilder,
 )
@@ -38,19 +39,20 @@ class GraphAPI:
             query_parameters=query_params,
         )
         schedules = []
+        logger.debug("Getting first page of role eligibility schedules")
         result = await self.graph_client.role_management.directory.role_eligibility_schedules.get(
             request_configuration=request_configuration
         )
         schedules.extend(result.value)
         # Pagination if next_link is present
         while result.odata_next_link:
+            logger.debug("Getting next page of role eligibility schedules")
             result = await self.graph_client.role_management.directory.role_eligibility_schedules.with_url(
                 result.odata_next_link
             ).get(
                 request_configuration=request_configuration
             )
             schedules.extend(result.value)
-
         return schedules
 
     async def get_group_members(self, group_id):
