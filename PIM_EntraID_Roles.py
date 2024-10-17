@@ -25,7 +25,8 @@ from functions.functions import (
 
 
 from functions.msgraphapi import GraphAPI
-#from functions.log_config import logger
+
+# from functions.log_config import logger
 
 logger = Kestra.logger()
 
@@ -53,22 +54,23 @@ async def process_entra_id(graph_client=None, confluence=None, args=None):
     role_mappings = sorted(
         role_mappings, key=lambda x: (x["Benutzer"], x["Rolle"]), reverse=False
     )
-    if (new_mappings or removed_mappings) and not args.test:
+    if new_mappings or removed_mappings:
         logger.info("Updating Confluence Page")
-        confluence_update_page(
-            confluence=confluence,
-            title=confluence_entraid_page_name,
-            parent_id=confluence_page_id,
-            table=role_mappings,
-            representation="storage",
-            full_width=False,
-            escape_table=True,
-            body_header=style_text(
-                "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident",
-                color="red",
-                bold=True,
-            ),
-        )
+        if not args.test:
+            confluence_update_page(
+                confluence=confluence,
+                title=confluence_entraid_page_name,
+                parent_id=confluence_page_id,
+                table=role_mappings,
+                representation="storage",
+                full_width=False,
+                escape_table=True,
+                body_header=style_text(
+                    "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident",
+                    color="red",
+                    bold=True,
+                ),
+            )
         Kestra.outputs(
             {
                 "status": "Changes Synchronised",
@@ -83,10 +85,15 @@ async def process_entra_id(graph_client=None, confluence=None, args=None):
 
 async def main():
     parser = argparse.ArgumentParser(
-                        prog="PIM EntraID Role Sync",
-                        description="Sync EntraID Role Assignments from Azure PIM to Confluence",
-                        )
-    parser.add_argument("-t", "--test", help="Dryrun the script without writing to Confluence", action="store_true")
+        prog="PIM EntraID Role Sync",
+        description="Sync EntraID Role Assignments from Azure PIM to Confluence",
+    )
+    parser.add_argument(
+        "-t",
+        "--test",
+        help="Dryrun the script without writing to Confluence",
+        action="store_true",
+    )
     args = parser.parse_args()
     if args.test:
         logger.info("Running in Test Mode")
@@ -98,9 +105,6 @@ async def main():
     )
     confluence = Confluence(url=confluence_url, token=confluence_token)
     await process_entra_id(graph_client=graph_client, confluence=confluence, args=args)
-
-
-
 
 
 if __name__ == "__main__":
