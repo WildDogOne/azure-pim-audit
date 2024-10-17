@@ -38,24 +38,18 @@ class GraphAPI:
             query_parameters=query_params,
         )
         schedules = []
-        next_link = None
-        while True:
-            if next_link:
-                result = await self.graph_client.role_management.directory.role_eligibility_schedules.with_url(
-                    next_link
-                ).get(
-                    request_configuration=request_configuration
-                )
-            else:
-                result = await self.graph_client.role_management.directory.role_eligibility_schedules.get(
-                    request_configuration=request_configuration
-                )
-
+        result = await self.graph_client.role_management.directory.role_eligibility_schedules.get(
+            request_configuration=request_configuration
+        )
+        schedules.extend(result.value)
+        # Pagination if next_link is present
+        while result.odata_next_link:
+            result = await self.graph_client.role_management.directory.role_eligibility_schedules.with_url(
+                result.odata_next_link
+            ).get(
+                request_configuration=request_configuration
+            )
             schedules.extend(result.value)
-
-            next_link = result.odata_next_link
-            if not next_link:
-                break
 
         return schedules
 
