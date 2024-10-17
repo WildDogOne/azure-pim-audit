@@ -18,7 +18,6 @@ async def get_assignments(pim):
         principal = assignment.principal
         role = assignment.role_definition.display_name
         principal_display_name = assignment.principal.display_name
-
         if isinstance(assignment.principal, Group):
             logger.debug(f"Group: {principal_display_name} is assigned to {role}")
             group_id = principal.id
@@ -39,7 +38,6 @@ async def get_assignments(pim):
 
 
 def build_user_array(assignment_dict):
-
     user_roles = {}
     for role in assignment_dict:
         if privileged_role_filter(role):
@@ -103,7 +101,8 @@ def check_removed_mappings(user_array, role_mappings):
                 break
         if not mapped:
             print(f"Mapping not found: {existing_mapping}")
-            role_mappings.remove(existing_mapping)
+            # TODO: Enable the following line to remove mappings that are not in the export
+            #role_mappings.remove(existing_mapping)
     return role_mappings
 
 
