@@ -1,4 +1,5 @@
 import asyncio
+from kestra import Kestra
 
 
 from creds import (
@@ -10,10 +11,7 @@ from creds import (
     confluence_url,
     confluence_entraid_page_name,
 )
-from functions.confluence import (
-    confluence_update_page,
-    style_text
-)
+from functions.confluence import confluence_update_page, style_text
 from atlassian import Confluence
 
 from functions.functions import (
@@ -26,7 +24,9 @@ from functions.functions import (
 
 
 from functions.msgraphapi import GraphAPI
-from functions.log_config import logger
+#from functions.log_config import logger
+
+logger = Kestra.logger()
 
 
 async def process_entra_id(graph_client, confluence):
@@ -43,26 +43,41 @@ async def process_entra_id(graph_client, confluence):
     )
     # Check for new mappings
     logger.info("Checking for new mappings")
-    role_mappings = check_new_mappings(user_array, role_mappings, headers)
+    role_mappings, new_mappings = check_new_mappings(user_array, role_mappings, headers)
     # Remove mappings that are not in the export
     logger.info("Checking for removed mappings")
-    role_mappings = check_removed_mappings(user_array, role_mappings)
+    role_mappings, removed_mappings = check_removed_mappings(user_array, role_mappings)
 
     # Sort the mappings by user name
     role_mappings = sorted(
         role_mappings, key=lambda x: (x["Benutzer"], x["Rolle"]), reverse=False
     )
-    logger.info("Updating Confluence Page")
-    confluence_update_page(
-        confluence=confluence,
-        title=confluence_entraid_page_name,
-        parent_id=confluence_page_id,
-        table=role_mappings,
-        representation="storage",
-        full_width=False,
-        escape_table=True,
-        body_header=style_text("Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident", color="red", bold=True),
-    )
+    if new_mappings or removed_mappings:
+        logger.info("Updating Confluence Page")
+        confluence_update_page(
+            confluence=confluence,
+            title=confluence_entraid_page_name,
+            parent_id=confluence_page_id,
+            table=role_mappings,
+            representation="storage",
+            full_width=False,
+            escape_table=True,
+            body_header=style_text(
+                "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident",
+                color="red",
+                bold=True,
+            ),
+        )
+        Kestra.outputs(
+            {
+                "status": "Changes Synchronised",
+                "new_mappings": new_mappings,
+                "removed_mappings": removed_mappings,
+            }
+        )
+    else:
+        logger.info("No changes detected")
+        Kestra.outputs({"status": "No changes detected"})
 
 
 async def main():
@@ -73,7 +88,6 @@ async def main():
     )
     confluence = Confluence(url=confluence_url, token=confluence_token)
     await process_entra_id(graph_client, confluence)
-
 
 
 if __name__ == "__main__":
