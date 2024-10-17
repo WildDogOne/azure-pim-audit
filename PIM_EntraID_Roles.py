@@ -88,6 +88,8 @@ async def main():
                         )
     parser.add_argument("-t", "--test", help="Dryrun the script without writing to Confluence", action="store_true")
     args = parser.parse_args()
+    if args.test:
+        logger.info("Running in Test Mode")
 
     graph_client = GraphAPI(
         azure_tenant_id=azure_tenant_id,
