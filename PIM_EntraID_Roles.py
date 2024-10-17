@@ -1,5 +1,6 @@
 import asyncio
 from kestra import Kestra
+import argparse
 
 
 from creds import (
@@ -29,7 +30,7 @@ from functions.msgraphapi import GraphAPI
 logger = Kestra.logger()
 
 
-async def process_entra_id(graph_client, confluence):
+async def process_entra_id(graph_client=None, confluence=None, args=None):
     # Get all Current EntraID Role Assignments from Azure PIM
     logger.info("Getting EntraID Role Assignments from Azure PIM")
     assignment_dict = await get_assignments(graph_client)
@@ -52,7 +53,7 @@ async def process_entra_id(graph_client, confluence):
     role_mappings = sorted(
         role_mappings, key=lambda x: (x["Benutzer"], x["Rolle"]), reverse=False
     )
-    if new_mappings or removed_mappings:
+    if (new_mappings or removed_mappings) and not args.test:
         logger.info("Updating Confluence Page")
         confluence_update_page(
             confluence=confluence,
@@ -81,14 +82,25 @@ async def process_entra_id(graph_client, confluence):
 
 
 async def main():
+    parser = argparse.ArgumentParser(
+                        prog="PIM EntraID Role Sync",
+                        description="Sync EntraID Role Assignments from Azure PIM to Confluence",
+                        )
+    parser.add_argument("-t", "--test", help="Dryrun the script without writing to Confluence", action="store_true")
+    args = parser.parse_args()
+
     graph_client = GraphAPI(
         azure_tenant_id=azure_tenant_id,
         azure_client_id=azure_client_id,
         azure_client_secret=azure_client_secret,
     )
     confluence = Confluence(url=confluence_url, token=confluence_token)
-    await process_entra_id(graph_client, confluence)
+    await process_entra_id(graph_client=graph_client, confluence=confluence, args=args)
+
+
+
 
 
 if __name__ == "__main__":
+
     asyncio.run(main())
