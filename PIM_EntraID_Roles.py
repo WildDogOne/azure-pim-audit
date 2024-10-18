@@ -1,6 +1,7 @@
 import asyncio
 from kestra import Kestra
 import argparse
+import time
 
 
 from creds import (
@@ -108,5 +109,7 @@ async def main():
 
 
 if __name__ == "__main__":
-
+    start = time.perf_counter()
     asyncio.run(main())
+    end = time.perf_counter()
+    Kestra.timer('duration', end - start)
