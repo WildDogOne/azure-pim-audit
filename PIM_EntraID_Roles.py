@@ -32,26 +32,44 @@ from functions.msgraphapi import GraphAPI
 logger = Kestra.logger()
 
 
+
 async def process_entra_id(graph_client=None, confluence=None, args=None):
+    
     # Get all Current EntraID Role Assignments from Azure PIM
+    start_function = time.perf_counter()
     logger.info("Getting EntraID Role Assignments from Azure PIM")
     assignment_dict = await get_assignments(graph_client)
     # Convert the results to a usable table
     logger.info("Building User Array")
     user_array = build_user_array(assignment_dict)
+    end_function = time.perf_counter()
+    Kestra.timer('Load_PIM_Users', end_function - start_function)
+
     # Get Currently Documented Role Mappings
+    start_function = time.perf_counter()
     logger.info("Getting Documented Role Mappings")
     role_mappings, headers = get_documented_mappings(
         confluence, confluence_page_id, confluence_entraid_page_name
     )
+    end_function = time.perf_counter()
+    Kestra.timer('Load_Documented_Users', end_function - start_function)
+
     # Check for new mappings
+    start_function = time.perf_counter()
     logger.info("Checking for new mappings")
     role_mappings, new_mappings = check_new_mappings(user_array, role_mappings, headers)
+    end_function = time.perf_counter()
+    Kestra.timer('Check_New_Mappings', end_function - start_function)
+
     # Remove mappings that are not in the export
+    start_function = time.perf_counter()
     logger.info("Checking for removed mappings")
     role_mappings, removed_mappings = check_removed_mappings(user_array, role_mappings)
+    end_function = time.perf_counter()
+    Kestra.timer('Check_Removed_Mappings', end_function - start_function)
 
     # Sort the mappings by user name
+    start_function = time.perf_counter()
     role_mappings = sorted(
         role_mappings, key=lambda x: (x["Benutzer"], x["Rolle"]), reverse=False
     )
@@ -82,7 +100,8 @@ async def process_entra_id(graph_client=None, confluence=None, args=None):
     else:
         logger.info("No changes detected")
         Kestra.outputs({"status": "No changes detected"})
-
+    end_function = time.perf_counter()
+    Kestra.timer('Upload_To_Confluence', end_function - start_function)
 
 async def main():
     parser = argparse.ArgumentParser(
