@@ -90,9 +90,7 @@ def check_new_mappings(user_array, role_mappings, headers):
                     exported_role[header] = ""
             print(f"New mapping: {exported_role}")
             role_mappings.append(exported_role)
-            changes.append(
-                **exported_role
-            )
+            changes.append(exported_role)
     if len(changes) < 1:
         changes = False
     return role_mappings, changes
@@ -112,9 +110,7 @@ def check_removed_mappings(user_array, role_mappings):
         if not mapped:
             print(f"Mapping not found: {existing_mapping}")
             role_mappings.remove(existing_mapping)
-            changes.append(
-                **existing_mapping
-            )
+            changes.append(existing_mapping)
     if len(changes) < 1:
         changes = False
     return role_mappings, changes
