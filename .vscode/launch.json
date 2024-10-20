@@ -10,6 +10,13 @@
             "request": "launch",
             "program": "PIM_EntraID_Roles.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: Azure Resources",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "PIM_Azure_Resources.py",
+            "console": "integratedTerminal"
         }
     ]
 }
