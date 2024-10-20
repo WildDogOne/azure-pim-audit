@@ -1,5 +1,6 @@
 from functions.msgraphapi import GraphAPI
 import asyncio
+import argparse
 from kestra import Kestra
 import time
 
@@ -48,7 +49,7 @@ def convert_to_common_table(assignment_dict):
     return ct
 
 
-async def main():
+async def process_azure_resources(graph_client=None, confluence=None, args=None):
     logger.info("Getting Azure Resource Role Assignments")
     role_assignments = get_azure_resource_role_assignments(
         azure_tenant_root, credential
@@ -91,20 +92,21 @@ async def main():
 
     logger.info("Updating Confluence Page")
     if new_mappings or removed_mappings:
-        confluence_update_page(
-            confluence=confluence,
-            title=confluence_azure_resource_page_name,
-            parent_id=confluence_page_id,
-            table=role_mappings,
-            representation="storage",
-            full_width=False,
-            escape_table=True,
-            body_header=style_text(
-                "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident",
-                color="red",
-                bold=True,
-            ),
-        )
+        if not args.test:
+            confluence_update_page(
+                confluence=confluence,
+                title=confluence_azure_resource_page_name,
+                parent_id=confluence_page_id,
+                table=role_mappings,
+                representation="storage",
+                full_width=False,
+                escape_table=True,
+                body_header=style_text(
+                    "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident",
+                    color="red",
+                    bold=True,
+                ),
+            )
         logger.info("Confluence Page Updated")
         Kestra.outputs(
             {
@@ -116,6 +118,26 @@ async def main():
     else:
         logger.info("No changes detected")
         Kestra.outputs({"status": "No changes detected"})
+
+
+async def main():
+    parser = argparse.ArgumentParser(
+        prog="PIM EntraID Role Sync",
+        description="Sync EntraID Role Assignments from Azure PIM to Confluence",
+    )
+    parser.add_argument(
+        "-t",
+        "--test",
+        help="Dryrun the script without writing to Confluence",
+        action="store_true",
+    )
+    args = parser.parse_args()
+    if args.test:
+        logger.info("Running in Test Mode")
+
+    await process_azure_resources(
+        graph_client=graph_client, confluence=confluence, args=args
+    )
 
 
 if __name__ == "__main__":
