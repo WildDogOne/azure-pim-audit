@@ -3,6 +3,7 @@ from kestra import Kestra
 
 logger = Kestra.logger()
 # from functions.log_config import logger
+from azure.mgmt.authorization import AuthorizationManagementClient
 from msgraph.generated.models.group import Group
 from functions.confluence import (
     confluence_update_page,
@@ -149,3 +150,117 @@ def privileged_role_filter(role):
         return True
     else:
         return False
+
+
+def check_new_azure_resource_mappings(
+    existing_role_mappings=[], new_role_mappings=[], headers=[]
+):
+    changes = []
+    for new_role_mapping in new_role_mappings:
+        mapped = False
+        for existing_role_mapping in existing_role_mappings:
+            if (
+                new_role_mapping["Benutzer"] == existing_role_mapping["Benutzer"]
+                and new_role_mapping["Rolle"] == existing_role_mapping["Rolle"]
+                and new_role_mapping["Scope"] == existing_role_mapping["Scope"]
+            ):
+                mapped = True
+                break
+        if not mapped:
+            for header in headers:
+                if header not in new_role_mapping:
+                    new_role_mapping[header] = ""
+            print(f"New mapping: {new_role_mapping}")
+            existing_role_mappings.append(new_role_mapping)
+            changes.append(new_role_mapping)
+    if len(changes) < 1:
+        changes = False
+    return existing_role_mappings, changes
+
+
+def check_removed_azure_resource_mappings(
+    existing_role_mappings=[], new_role_mappings=[]
+):
+    changes = []
+    for existing_role_mapping in existing_role_mappings:
+        mapped = False
+        for new_role_mapping in new_role_mappings:
+            if (
+                new_role_mapping["Benutzer"] == existing_role_mapping["Benutzer"]
+                and new_role_mapping["Rolle"] == existing_role_mapping["Rolle"]
+                and new_role_mapping["Scope"] == existing_role_mapping["Scope"]
+            ):
+                mapped = True
+                break
+        if not mapped:
+            print(f"Removed mapping: {existing_role_mapping}")
+            existing_role_mappings.remove(existing_role_mapping)
+            changes.append(existing_role_mapping)
+    if len(changes) < 1:
+        changes = False
+    return existing_role_mappings, changes
+
+def get_azure_resource_role_assignments(subscription_id, credential):
+    scope = f"/subscriptions/{subscription_id}"
+    client = AuthorizationManagementClient(credential, subscription_id)
+    assignments = client.role_eligibility_schedule_instances.list_for_scope(scope)
+
+    results = []
+
+    for assignment in assignments:
+        expanded = assignment.expanded_properties
+        end_date_time = assignment.end_date_time or "permanent"
+        result = {
+            "PrincipalName": expanded.principal.display_name,
+            # "PrincipalEmail": expanded.principal.email,
+            "PrincipalType": expanded.principal.type,
+            "PrincipalId": expanded.principal.id,
+            "RoleName": expanded.role_definition.display_name,
+            "RoleType": expanded.role_definition.type,
+            # "RoleId": expanded.role_definition.id,
+            # "ScopeId": expanded.scope.id,
+            "ScopeName": expanded.scope.display_name,
+            "ScopeType": expanded.scope.type,
+            # "Status": assignment.status,
+            # "createdOn": assignment.created_on,
+            # "startDateTime": assignment.start_date_time,
+            # "endDateTime": end_date_time,
+            # "updatedOn": assignment.updated_on,
+            "memberType": assignment.member_type,
+            # "id": assignment.id,
+        }
+
+        results.append(result)
+    return results
+
+async def build_azure_resource_assignments(
+    role_assignments={}, assignment_dict={}, groups_evaluated=[], graph_client=None
+):
+    for role_assignment in role_assignments:
+        if role_assignment["PrincipalType"] == "Group":
+            if role_assignment["ScopeName"] not in assignment_dict:
+                assignment_dict[role_assignment["ScopeName"]] = {}
+
+            # Extract the elements for the new format
+            username = None
+            scope = role_assignment["ScopeName"]
+            role = role_assignment["RoleName"]
+
+            if role_assignment["PrincipalId"] not in groups_evaluated:
+                group_members = await graph_client.get_group_members(
+                    role_assignment["PrincipalId"]
+                )
+                groups_evaluated.append(role_assignment["PrincipalId"])
+                if len(group_members) > 0:
+
+                    # Add the extracted elements to the dictionary
+                    if scope not in assignment_dict:
+                        assignment_dict[scope] = {}
+
+                    if role not in assignment_dict[scope]:
+                        assignment_dict[scope][role] = []
+                    for group_member in group_members:
+                        user_display_name = group_member.display_name
+                        if user_display_name not in assignment_dict[scope][role]:
+                            assignment_dict[scope][role].append(user_display_name)
+    return assignment_dict, groups_evaluated
