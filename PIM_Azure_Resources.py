@@ -13,7 +13,7 @@ from creds import (
     confluence_token,
     confluence_url,
     confluence_azure_resource_page_name,
-    azure_tenant_root,
+    azure_root,
 )
 from azure.identity import ClientSecretCredential
 from azure.identity import AzureCliCredential
@@ -52,7 +52,7 @@ def convert_to_common_table(assignment_dict):
 async def process_azure_resources(graph_client=None, confluence=None, args=None):
     logger.info("Getting Azure Resource Role Assignments")
     role_assignments = get_azure_resource_role_assignments(
-        azure_tenant_root, credential
+        azure_root, credential
     )
 
     logger.info("Writing Assignments into a common format")
