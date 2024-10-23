@@ -99,21 +99,23 @@ def check_new_mappings(user_array, role_mappings, headers):
 
 def check_removed_mappings(user_array, role_mappings):
     changes = []
-    for existing_mapping in role_mappings:
-        mapped = False
-        for exported_role in user_array:
-            if (
-                exported_role["Benutzer"] == existing_mapping["Benutzer"]
-                and exported_role["Rolle"] == existing_mapping["Rolle"]
-            ):
-                mapped = True
-                break
-        if not mapped:
+
+    # Collect mappings to be removed
+    for existing_mapping in [mapping for mapping in role_mappings]:
+        if not any(
+            exported_role["Benutzer"] == existing_mapping["Benutzer"]
+            and exported_role["Rolle"] == existing_mapping["Rolle"]
+            for exported_role in user_array
+        ):
             print(f"Mapping not found: {existing_mapping}")
-            role_mappings.remove(existing_mapping)
             changes.append(existing_mapping)
-    if len(changes) < 1:
+
+    # Filter out mappings that are no longer needed
+    role_mappings = [mapping for mapping in role_mappings if mapping not in changes]
+
+    if len(changes) == 0:
         changes = False
+
     return role_mappings, changes
 
 
@@ -200,6 +202,7 @@ def check_removed_azure_resource_mappings(
         changes = False
     return existing_role_mappings, changes
 
+
 def get_azure_resource_role_assignments(subscription_id, credential):
     scope = f"/subscriptions/{subscription_id}"
     client = AuthorizationManagementClient(credential, subscription_id)
@@ -232,6 +235,7 @@ def get_azure_resource_role_assignments(subscription_id, credential):
 
         results.append(result)
     return results
+
 
 async def build_azure_resource_assignments(
     role_assignments={}, assignment_dict={}, groups_evaluated=[], graph_client=None
