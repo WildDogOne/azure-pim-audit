@@ -90,6 +90,9 @@ async def process_entra_id(graph_client=None, confluence=None, args=None):
                     bold=True,
                 ),
             )
+        from pprint import pprint
+        pprint(new_mappings)
+        pprint(removed_mappings)
         Kestra.outputs(
             {
                 "status": "Changes Synchronised",
