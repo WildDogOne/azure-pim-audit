@@ -252,21 +252,26 @@ def get_azure_subscriptions(credential=None, filters=None, starts_with=None):
     response = client.subscriptions.list()
     subscriptions = []
     for item in response:
+        subscription_id = item.subscription_id
+        append_subscription = False
         if starts_with:
             if isinstance(starts_with, str):
                 starts_with = [starts_with]
             for x in starts_with:
                 if item.display_name.lower().startswith(x.lower()):
-                    subscriptions.append(item.subscription_id)
+                    append_subscription = True
         if filters:
             if isinstance(filters, str):
                 filters = [filters]
             for x in filters:
                 if x.lower() in item.display_name.lower():
-                    subscriptions.append(item.subscription_id)
+                    append_subscription = True
 
         if not filters and not starts_with:
-            subscriptions.append(item.subscription_id)
+            append_subscription = True
+
+        if append_subscription and subscription_id not in subscriptions:
+            subscriptions.append(subscription_id)
 
     return subscriptions
 
