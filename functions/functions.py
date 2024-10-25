@@ -184,24 +184,32 @@ def check_new_azure_resource_mappings(
 def check_removed_azure_resource_mappings(
     existing_role_mappings=[], new_role_mappings=[]
 ):
-    changes = []
-    for existing_role_mapping in existing_role_mappings:
-        mapped = False
-        for new_role_mapping in new_role_mappings:
-            if (
-                new_role_mapping["Benutzer"] == existing_role_mapping["Benutzer"]
-                and new_role_mapping["Rolle"] == existing_role_mapping["Rolle"]
-                and new_role_mapping["Scope"] == existing_role_mapping["Scope"]
-            ):
-                mapped = True
-                break
-        if not mapped:
-            print(f"Removed mapping: {existing_role_mapping}")
-            existing_role_mappings.remove(existing_role_mapping)
-            changes.append(existing_role_mapping)
-    if len(changes) < 1:
-        changes = False
-    return existing_role_mappings, changes
+    # Use list comprehension to find unmapped role mappings from existing_role_mappings.
+    changes = [
+        mapping
+        for mapping in existing_role_mappings
+        if not any(
+            (
+                new_mapping["Benutzer"] == mapping["Benutzer"]
+                and new_mapping["Rolle"] == mapping["Rolle"]
+                and new_mapping["Scope"] == mapping["Scope"]
+            )
+            for new_mapping in new_role_mappings
+        )
+    ]
+
+    # If there are changes, remove the unmapped role mappings from existing_role_mappings.
+    if changes:
+        for change in changes:
+            print(f"Removed mapping: {change}")
+            existing_role_mappings.remove(change)
+
+        # Return updated lists
+        return existing_role_mappings, changes
+
+    else:
+        # No changes to report
+        return existing_role_mappings, False
 
 
 def get_azure_resource_role_assignments(subscription_ids, credential):
@@ -238,16 +246,26 @@ def get_azure_resource_role_assignments(subscription_ids, credential):
     return results
 
 
-def get_azure_subscriptions(credential=None, filter=None, start_swith=None):
+def get_azure_subscriptions(credential=None, filters=None, starts_with=None):
 
     client = SubscriptionClient(credential)
     response = client.subscriptions.list()
     subscriptions = []
     for item in response:
-        if start_swith:
-            if item.display_name.startswith(start_swith):
-                subscriptions.append(item.subscription_id)
-        else:
+        if starts_with:
+            if isinstance(starts_with, str):
+                starts_with = [starts_with]
+            for x in starts_with:
+                if item.display_name.lower().startswith(x.lower()):
+                    subscriptions.append(item.subscription_id)
+        if filters:
+            if isinstance(filters, str):
+                filters = [filters]
+            for x in filters:
+                if x.lower() in item.display_name.lower():
+                    subscriptions.append(item.subscription_id)
+
+        if not filters and not starts_with:
             subscriptions.append(item.subscription_id)
 
     return subscriptions

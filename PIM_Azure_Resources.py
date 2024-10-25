@@ -51,12 +51,21 @@ def convert_to_common_table(assignment_dict):
 
 async def process_azure_resources(graph_client=None, confluence=None, args=None):
     logger.info("Getting Azure Subscriptions")
-    subscriptions = get_azure_subscriptions(credential=credential, start_swith="p-")
+    start_function = time.perf_counter()
+    subscriptions = get_azure_subscriptions(
+        credential=credential, filters=["-v-", "_v_"]
+    )
+    end_function = time.perf_counter()
+    Kestra.timer("Loading Subscriptions", end_function - start_function)
 
     logger.info("Getting Azure Resource Role Assignments")
+    start_function = time.perf_counter()
     role_assignments = get_azure_resource_role_assignments(subscriptions, credential)
+    end_function = time.perf_counter()
+    Kestra.timer("Loading Role Assignments", end_function - start_function)
 
     logger.info("Writing Assignments into a common format")
+    start_function = time.perf_counter()
     assignment_dict = {}
     groups_evaluated = []
     assignment_dict, groups_evaluated = await build_azure_resource_assignments(
@@ -66,8 +75,11 @@ async def process_azure_resources(graph_client=None, confluence=None, args=None)
         graph_client=graph_client,
     )
     new_role_mappings = convert_to_common_table(assignment_dict)
+    end_function = time.perf_counter()
+    Kestra.timer("Writing into common format", end_function - start_function)
 
     logger.info("Getting existing Azure Resource Role Mappings")
+    start_function = time.perf_counter()
     existing_role_mappings, headers = get_documented_mappings(
         confluence, confluence_page_id, confluence_azure_resource_page_name
     )
@@ -90,8 +102,11 @@ async def process_azure_resources(graph_client=None, confluence=None, args=None)
         key=lambda x: (x["Benutzer"], x["Scope"], x["Rolle"]),
         reverse=False,
     )
+    end_function = time.perf_counter()
+    Kestra.timer("Comparing with existing documentation", end_function - start_function)
 
     logger.info("Updating Confluence Page")
+    start_function = time.perf_counter()
     if new_mappings or removed_mappings:
         if not args.test:
             confluence_update_page(
@@ -119,6 +134,8 @@ async def process_azure_resources(graph_client=None, confluence=None, args=None)
     else:
         logger.info("No changes detected")
         Kestra.outputs({"status": "No changes detected"})
+    end_function = time.perf_counter()
+    Kestra.timer("Updating Confluence", end_function - start_function)
 
 
 async def main():
