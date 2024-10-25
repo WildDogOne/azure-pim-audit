@@ -1,5 +1,6 @@
 azure-identity
 azure-mgmt-authorization
+azure-mgmt-subscription
 tabulate
 msgraph-sdk
 atlassian-python-api
