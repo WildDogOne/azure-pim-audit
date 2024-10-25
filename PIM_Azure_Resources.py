@@ -53,7 +53,7 @@ async def process_azure_resources(graph_client=None, confluence=None, args=None)
     logger.info("Getting Azure Subscriptions")
     start_function = time.perf_counter()
     subscriptions = get_azure_subscriptions(
-        credential=credential, filters=["-v-", "_v_"], starts_with=["p-", "t-"]
+        credential=credential#, filters=["-v-", "_v_"], starts_with=["p-", "t-"]
     )
     end_function = time.perf_counter()
     Kestra.timer("Loading Subscriptions", end_function - start_function)
