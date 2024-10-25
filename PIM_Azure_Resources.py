@@ -13,7 +13,6 @@ from creds import (
     confluence_token,
     confluence_url,
     confluence_azure_resource_page_name,
-    azure_root,
 )
 from azure.identity import ClientSecretCredential
 from azure.identity import AzureCliCredential
@@ -26,6 +25,7 @@ from functions.functions import (
     check_removed_azure_resource_mappings,
     get_azure_resource_role_assignments,
     build_azure_resource_assignments,
+    get_azure_subscriptions,
 )
 
 credential = ClientSecretCredential(
@@ -50,10 +50,11 @@ def convert_to_common_table(assignment_dict):
 
 
 async def process_azure_resources(graph_client=None, confluence=None, args=None):
+    logger.info("Getting Azure Subscriptions")
+    subscriptions = get_azure_subscriptions(credential=credential, start_swith="p-")
+
     logger.info("Getting Azure Resource Role Assignments")
-    role_assignments = get_azure_resource_role_assignments(
-        azure_root, credential
-    )
+    role_assignments = get_azure_resource_role_assignments(subscriptions, credential)
 
     logger.info("Writing Assignments into a common format")
     assignment_dict = {}

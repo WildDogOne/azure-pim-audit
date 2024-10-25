@@ -4,6 +4,7 @@ from kestra import Kestra
 logger = Kestra.logger()
 # from functions.log_config import logger
 from azure.mgmt.authorization import AuthorizationManagementClient
+from azure.mgmt.subscription import SubscriptionClient
 from msgraph.generated.models.group import Group
 from functions.confluence import (
     confluence_update_page,
@@ -203,38 +204,53 @@ def check_removed_azure_resource_mappings(
     return existing_role_mappings, changes
 
 
-def get_azure_resource_role_assignments(subscription_id, credential):
-    scope = f"/subscriptions/{subscription_id}"
-    client = AuthorizationManagementClient(credential, subscription_id)
-    assignments = client.role_eligibility_schedule_instances.list_for_scope(scope)
-
+def get_azure_resource_role_assignments(subscription_ids, credential):
+    if isinstance(subscription_ids, str):
+        subscription_ids = [subscription_ids]
     results = []
-
-    for assignment in assignments:
-        expanded = assignment.expanded_properties
-        end_date_time = assignment.end_date_time or "permanent"
-        result = {
-            "PrincipalName": expanded.principal.display_name,
-            # "PrincipalEmail": expanded.principal.email,
-            "PrincipalType": expanded.principal.type,
-            "PrincipalId": expanded.principal.id,
-            "RoleName": expanded.role_definition.display_name,
-            "RoleType": expanded.role_definition.type,
-            # "RoleId": expanded.role_definition.id,
-            # "ScopeId": expanded.scope.id,
-            "ScopeName": expanded.scope.display_name,
-            "ScopeType": expanded.scope.type,
-            # "Status": assignment.status,
-            # "createdOn": assignment.created_on,
-            # "startDateTime": assignment.start_date_time,
-            # "endDateTime": end_date_time,
-            # "updatedOn": assignment.updated_on,
-            "memberType": assignment.member_type,
-            # "id": assignment.id,
-        }
-
-        results.append(result)
+    for subscription_id in subscription_ids:
+        scope = f"/subscriptions/{subscription_id}"
+        client = AuthorizationManagementClient(credential, subscription_id)
+        assignments = client.role_eligibility_schedule_instances.list_for_scope(scope)
+        for assignment in assignments:
+            expanded = assignment.expanded_properties
+            # end_date_time = assignment.end_date_time or "permanent"
+            result = {
+                "PrincipalName": expanded.principal.display_name,
+                # "PrincipalEmail": expanded.principal.email,
+                "PrincipalType": expanded.principal.type,
+                "PrincipalId": expanded.principal.id,
+                "RoleName": expanded.role_definition.display_name,
+                "RoleType": expanded.role_definition.type,
+                # "RoleId": expanded.role_definition.id,
+                # "ScopeId": expanded.scope.id,
+                "ScopeName": expanded.scope.display_name,
+                "ScopeType": expanded.scope.type,
+                # "Status": assignment.status,
+                # "createdOn": assignment.created_on,
+                # "startDateTime": assignment.start_date_time,
+                # "endDateTime": end_date_time,
+                # "updatedOn": assignment.updated_on,
+                "memberType": assignment.member_type,
+                # "id": assignment.id,
+            }
+            results.append(result)
     return results
+
+
+def get_azure_subscriptions(credential=None, filter=None, start_swith=None):
+
+    client = SubscriptionClient(credential)
+    response = client.subscriptions.list()
+    subscriptions = []
+    for item in response:
+        if start_swith:
+            if item.display_name.startswith(start_swith):
+                subscriptions.append(item.subscription_id)
+        else:
+            subscriptions.append(item.subscription_id)
+
+    return subscriptions
 
 
 async def build_azure_resource_assignments(
