@@ -86,7 +86,7 @@ class GraphAPI:
             roles.extend(result.value)
         return roles
 
-    async def get_entraid_role_assignments(self, role_id):
+    async def get_entraid_role_assignments(self):
         query_params = UnifiedRoleAssignmentItemRequestBuilder.UnifiedRoleAssignmentItemRequestBuilderGetQueryParameters(
             expand=["principal"],
         )
@@ -95,14 +95,11 @@ class GraphAPI:
             query_parameters=query_params,
         )
 
-        result = await self.graph_client.role_management.directory.role_assignments.by_unified_role_assignment_id(
-            role_id
-        ).get(
+        result = await self.graph_client.role_management.directory.role_assignments.get(
             request_configuration=request_configuration
         )
         from pprint import pprint
 
-        pprint(result)
         role_assignments = []
         role_assignments.extend(result.value)
         while result.odata_next_link:
