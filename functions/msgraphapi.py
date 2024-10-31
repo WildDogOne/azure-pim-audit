@@ -1,5 +1,6 @@
 from msgraph import GraphServiceClient
 from kestra import Kestra
+
 logger = Kestra.logger()
 from msgraph.generated.role_management.directory.role_eligibility_schedules.role_eligibility_schedules_request_builder import (
     RoleEligibilitySchedulesRequestBuilder,
@@ -7,8 +8,14 @@ from msgraph.generated.role_management.directory.role_eligibility_schedules.role
 from msgraph.generated.groups.item.members.count.count_request_builder import (
     CountRequestBuilder,
 )
+from msgraph.generated.role_management.directory.role_assignments.role_assignments_request_builder import (
+    RoleAssignmentsRequestBuilder,
+)
 from kiota_abstractions.base_request_configuration import RequestConfiguration
 from azure.identity.aio import ClientSecretCredential
+from msgraph.generated.role_management.directory.role_assignments.item.unified_role_assignment_item_request_builder import (
+    UnifiedRoleAssignmentItemRequestBuilder,
+)
 
 
 class GraphAPI:
@@ -62,3 +69,48 @@ class GraphAPI:
 
         result = await self.graph_client.groups.by_group_id(group_id).members.get()
         return result.value
+
+    async def get_entraid_roles(self):
+
+        result = (
+            await self.graph_client.role_management.directory.role_definitions.get()
+        )
+        roles = []
+        roles.extend(result.value)
+        # Pagination if next_link is present
+        while result.odata_next_link:
+            logger.debug("Getting next page of role eligibility schedules")
+            result = await self.graph_client.role_management.directory.role_definitions.with_url(
+                result.odata_next_link
+            ).get()
+            roles.extend(result.value)
+        return roles
+
+    async def get_entraid_role_assignments(self, role_id):
+        query_params = UnifiedRoleAssignmentItemRequestBuilder.UnifiedRoleAssignmentItemRequestBuilderGetQueryParameters(
+            expand=["principal"],
+        )
+
+        request_configuration = RequestConfiguration(
+            query_parameters=query_params,
+        )
+
+        result = await self.graph_client.role_management.directory.role_assignments.by_unified_role_assignment_id(
+            role_id
+        ).get(
+            request_configuration=request_configuration
+        )
+        from pprint import pprint
+
+        pprint(result)
+        role_assignments = []
+        role_assignments.extend(result.value)
+        while result.odata_next_link:
+            logger.debug("Getting next page of role eligibility schedules")
+            result = await self.graph_client.role_management.directory.role_assignments.with_url(
+                result.odata_next_link
+            ).get(
+                request_configuration=request_configuration
+            )
+            role_assignments.extend(result.value)
+        return role_assignments
