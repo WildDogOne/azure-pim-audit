@@ -12,6 +12,13 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Python Debugger: EntraID Audit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "Audit_EntraID.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python Debugger: Azure Resources",
             "type": "debugpy",
             "request": "launch",
