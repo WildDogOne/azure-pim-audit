@@ -13,6 +13,7 @@ from creds import (
     confluence_url,
     confluence_audit_entraid_page_name,
 )
+from functions.functions import get_assignments
 from functions.confluence import confluence_update_page
 from atlassian import Confluence
 from functions.msgraphapi import GraphAPI
@@ -47,9 +48,18 @@ def convert_to_common_table(assignment_dict):
     return ct
 
 
-async def audit_assignments(assignments=None, role_dict=None, graph_client=None):
+def check_pim(user=None, role=None, pim_assignment_dict=None):
+    if role in pim_assignment_dict and user in pim_assignment_dict[role]:
+        return True
+    return False
+
+
+async def audit_assignments(
+    assignments=None, role_dict=None, graph_client=None, pim_assignment_dict=None
+):
     assignment_dict = {}
     for assignment in assignments:
+        role_name = role_dict[assignment.role_definition_id]["display_name"]
         if isinstance(assignment.principal, Group):
             group_members = await graph_client.get_group_members(
                 assignment.principal.id
@@ -59,16 +69,20 @@ async def audit_assignments(assignments=None, role_dict=None, graph_client=None)
                     member_display_name = group_member.display_name
                     if member_display_name not in assignment_dict:
                         assignment_dict[member_display_name] = []
-                    assignment_dict[member_display_name].append(
-                        role_dict[assignment.role_definition_id]["display_name"]
-                    )
+                    if not check_pim(
+                        user=member_display_name,
+                        role=role_name,
+                        pim_assignment_dict=pim_assignment_dict,
+                    ):
+                        assignment_dict[member_display_name].append(role_name)
         else:
             user = assignment.principal.display_name
             if user not in assignment_dict:
                 assignment_dict[user] = []
-            assignment_dict[user].append(
-                role_dict[assignment.role_definition_id]["display_name"]
-            )
+            if not check_pim(
+                user=user, role=role_name, pim_assignment_dict=pim_assignment_dict
+            ):
+                assignment_dict[user].append(role_name)
 
     ct = convert_to_common_table(assignment_dict)
     return ct
@@ -79,8 +93,21 @@ async def audit_entraid(graph_client=None, confluence=None, args=None):
     roles = await graph_client.get_entraid_roles()
     role_dict = format_entraid_roles(roles)
     assignments = await graph_client.get_entraid_role_assignments()
+
+    # Get all Current EntraID Role Assignments from Azure PIM
+    start_function = time.perf_counter()
+    logger.info("Getting EntraID Role Assignments from Azure PIM")
+    pim_assignment_dict = await get_assignments(graph_client)
+    # Convert the results to a usable table
+    logger.info("Building User Array")
+    end_function = time.perf_counter()
+    Kestra.timer("Load PIM Users", end_function - start_function)
+
     ct = await audit_assignments(
-        assignments=assignments, role_dict=role_dict, graph_client=graph_client
+        assignments=assignments,
+        role_dict=role_dict,
+        graph_client=graph_client,
+        pim_assignment_dict=pim_assignment_dict,
     )
 
     if args.test:
