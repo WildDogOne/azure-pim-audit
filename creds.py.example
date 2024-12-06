@@ -1,9 +1,21 @@
 # Confluence Config
-confluence_url = "https://confluence.company.server"
-confluence_token = "XXXXXX"
+confluence_url = "https://confluence.organisation.name"
+confluence_token = "123456"
 confluence_page_id = "123456"
+confluence_entraid_page_name = "PIM: Test"
+confluence_azure_resource_page_name = "PIM: Azure Resource Rollen"
+confluence_audit_entraid_page_name = "Audit: EntraID Active Role Assignments"
+confluence_audit_azure_resources_page_name = "Audit: Azure Resources Active Role Assignments"
+
+
+azure_subscription_exclusions = ["Developer"]
+azure_subscription_id_exclustions = []
 
 # Azure Config
-azure_tenant_id = "XXX"  # Paste your own tenant ID here
-azure_client_id = "XXX"  # Paste your own app ID here
-azure_client_secret = "XXX"  # Paste your own app secret here
+azure_tenant_id = (
+    "123456"  # Paste your own tenant ID here
+)
+azure_client_id = "123456"  # Paste your own app ID here
+azure_client_secret = (
+    "123456"  # Paste your own app secret here
+)
