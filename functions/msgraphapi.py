@@ -125,3 +125,16 @@ class GraphAPI:
             ).get()
             users.extend(result.value)
         return users
+
+    async def get_all_groups(self):
+        groups = []
+        logger.debug("Getting first page of all groups")
+        result = await self.graph_client.groups.get()
+        groups.extend(result.value)
+        while result.odata_next_link:
+            logger.debug("Getting next page of all groups")
+            result = await self.graph_client.groups.with_url(
+                result.odata_next_link
+            ).get()
+            groups.extend(result.value)
+        return groups

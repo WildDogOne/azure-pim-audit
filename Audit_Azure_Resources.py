@@ -68,7 +68,7 @@ def subscription_translate(scope=None, subscription_dict=None):
         logger.error("Subscription not found in Azure")
         subscription = subscription_id
     for exclusion in azure_subscription_id_exclustions:
-        if exclusion in subscription_id:
+        if exclusion == subscription_id:
             return False
     for exclusion in azure_subscription_exclusions:
         if exclusion in subscription.lower():
@@ -121,14 +121,26 @@ authorizationresources
                     }
                 )
             else:
-                logger.error("User not found in EntraID")
-                ct.append(
-                    {
-                        "Benutzer": principalId,
-                        "Rolle": resource["roleName"],
-                        "Scope": scope,
-                    }
-                )
+                try:
+                    group_members = await graph_client.get_group_members(principalId)
+                    if group_members:
+                        for group_member in group_members:
+                            ct.append(
+                                {
+                                    "Benutzer": group_member.display_name,
+                                    "Rolle": resource["roleName"],
+                                    "Scope": scope,
+                                }
+                            )
+                except Exception as e:
+                    logger.error("Cannot Resolve UUID")
+                    ct.append(
+                        {
+                            "Benutzer": principalId,
+                            "Rolle": resource["roleName"],
+                            "Scope": scope,
+                        }
+                    )
     ct = sorted(
         ct,
         key=lambda x: (x["Benutzer"], x["Rolle"]),
