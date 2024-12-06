@@ -12,6 +12,8 @@ from creds import (
     confluence_token,
     confluence_url,
     confluence_audit_azure_resources_page_name,
+    azure_subscription_exclusions,
+    azure_subscription_id_exclustions,
 )
 from functions.confluence import confluence_update_page
 from atlassian import Confluence
@@ -65,6 +67,13 @@ def subscription_translate(scope=None, subscription_dict=None):
     else:
         logger.error("Subscription not found in Azure")
         subscription = subscription_id
+    for exclusion in azure_subscription_id_exclustions:
+        if exclusion in subscription_id:
+            return False
+    for exclusion in azure_subscription_exclusions:
+        if exclusion in subscription.lower():
+            return False
+
     scope = f"{start}{subscription}{end}"
     logger.debug("Scope: " + scope)
     return scope
@@ -102,9 +111,8 @@ authorizationresources
         scope = subscription_translate(
             scope=resource["scope"], subscription_dict=subscription_dict
         )
-        if "student" not in scope.lower():
+        if scope:
             if principalId in userid_dict:
-                # resource["user"] = userid_dict[principalId]
                 ct.append(
                     {
                         "Benutzer": userid_dict[principalId],
