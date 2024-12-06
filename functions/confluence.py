@@ -36,7 +36,6 @@ def confluence_update_page(
     toc=False,
 ):
 
-    # body += f"Page Generated on: {datetime.now().strftime('%d.%m.%y %H:%M')}<br/>"
     if toc:
         body = '<ac:structured-macro ac:name="toc"/>'
     else:

@@ -7,3 +7,4 @@ atlassian-python-api
 pandas
 lxml
 kestra
+azure-mgmt-resourcegraph

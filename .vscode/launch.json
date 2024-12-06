@@ -19,6 +19,13 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Python Debugger: Azure Resources Audit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "Audit_Azure_Resources.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python Debugger: Azure Resources",
             "type": "debugpy",
             "request": "launch",

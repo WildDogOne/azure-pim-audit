@@ -246,11 +246,14 @@ def get_azure_resource_role_assignments(subscription_ids, credential):
     return results
 
 
-def get_azure_subscriptions(credential=None, filters=None, starts_with=None):
+def get_azure_subscriptions(credential=None, filters=None, starts_with=None, dict=False):
 
     client = SubscriptionClient(credential)
     response = client.subscriptions.list()
-    subscriptions = []
+    if dict:
+        subscriptions = {}
+    else:
+        subscriptions = []
     for item in response:
         subscription_id = item.subscription_id
         append_subscription = False
@@ -271,7 +274,10 @@ def get_azure_subscriptions(credential=None, filters=None, starts_with=None):
             append_subscription = True
 
         if append_subscription and subscription_id not in subscriptions:
-            subscriptions.append(subscription_id)
+            if dict:
+                subscriptions[subscription_id] = item.display_name
+            else:
+                subscriptions.append(subscription_id)
 
     return subscriptions
 
