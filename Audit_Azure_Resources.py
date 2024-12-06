@@ -102,24 +102,25 @@ authorizationresources
         scope = subscription_translate(
             scope=resource["scope"], subscription_dict=subscription_dict
         )
-        if principalId in userid_dict:
-            # resource["user"] = userid_dict[principalId]
-            ct.append(
-                {
-                    "Benutzer": userid_dict[principalId],
-                    "Rolle": resource["roleName"],
-                    "Scope": scope,
-                }
-            )
-        else:
-            logger.error("User not found in EntraID")
-            ct.append(
-                {
-                    "Benutzer": principalId,
-                    "Rolle": resource["roleName"],
-                    "Scope": scope,
-                }
-            )
+        if "student" not in scope.lower():
+            if principalId in userid_dict:
+                # resource["user"] = userid_dict[principalId]
+                ct.append(
+                    {
+                        "Benutzer": userid_dict[principalId],
+                        "Rolle": resource["roleName"],
+                        "Scope": scope,
+                    }
+                )
+            else:
+                logger.error("User not found in EntraID")
+                ct.append(
+                    {
+                        "Benutzer": principalId,
+                        "Rolle": resource["roleName"],
+                        "Scope": scope,
+                    }
+                )
     ct = sorted(
         ct,
         key=lambda x: (x["Benutzer"], x["Rolle"]),
