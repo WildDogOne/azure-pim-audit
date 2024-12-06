@@ -14,6 +14,7 @@ from creds import (
     confluence_audit_azure_resources_page_name,
     azure_subscription_exclusions,
     azure_subscription_id_exclustions,
+    azure_scope_exclusions,
 )
 from functions.confluence import confluence_update_page
 from atlassian import Confluence
@@ -79,6 +80,13 @@ def subscription_translate(scope=None, subscription_dict=None):
     return scope
 
 
+def check_role_exclusions(role):
+    for exclusion in azure_scope_exclusions:
+        if exclusion in role:
+            return False
+    return True
+
+
 async def audit_azure_resources(graph_client=None, confluence=None, args=None):
     query = """
 authorizationresources
@@ -111,7 +119,7 @@ authorizationresources
         scope = subscription_translate(
             scope=resource["scope"], subscription_dict=subscription_dict
         )
-        if scope:
+        if scope and check_role_exclusions(resource["roleName"]):
             if principalId in userid_dict:
                 ct.append(
                     {
