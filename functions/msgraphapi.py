@@ -111,3 +111,17 @@ class GraphAPI:
             )
             role_assignments.extend(result.value)
         return role_assignments
+
+    async def get_all_users(self):
+        users = []
+        logger.debug("Getting first page of all users")
+        result = await self.graph_client.users.get()
+        users.extend(result.value)
+        # Pagination if next_link is present
+        while result.odata_next_link:
+            logger.debug("Getting next page of all users")
+            result = await self.graph_client.users.with_url(
+                result.odata_next_link
+            ).get()
+            users.extend(result.value)
+        return users
