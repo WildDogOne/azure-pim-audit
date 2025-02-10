@@ -118,7 +118,7 @@ async def process_azure_resources(graph_client=None, confluence=None, args=None)
                 full_width=False,
                 escape_table=True,
                 body_header=style_text(
-                    "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei bedarf an neuen rechten bitte via Incident",
+                    "Achtung! Nur bestehende Einträge ergänzen, keine neue hinzufügen!<br/>Bei Bedarf an neuen rechten bitte via Incident",
                     color="red",
                     bold=True,
                 ),
