@@ -81,8 +81,8 @@ def check_new_mappings(user_array, role_mappings, headers):
         mapped = False
         for existing_mapping in role_mappings:
             if (
-                exported_role["Benutzer"] == existing_mapping["Benutzer"]
-                and exported_role["Rolle"] == existing_mapping["Rolle"]
+                    exported_role["Benutzer"] == existing_mapping["Benutzer"]
+                    and exported_role["Rolle"] == existing_mapping["Rolle"]
             ):
                 mapped = True
                 break
@@ -104,9 +104,9 @@ def check_removed_mappings(user_array, role_mappings):
     # Collect mappings to be removed
     for existing_mapping in [mapping for mapping in role_mappings]:
         if not any(
-            exported_role["Benutzer"] == existing_mapping["Benutzer"]
-            and exported_role["Rolle"] == existing_mapping["Rolle"]
-            for exported_role in user_array
+                exported_role["Benutzer"] == existing_mapping["Benutzer"]
+                and exported_role["Rolle"] == existing_mapping["Rolle"]
+                for exported_role in user_array
         ):
             print(f"Mapping not found: {existing_mapping}")
             changes.append(existing_mapping)
@@ -148,6 +148,7 @@ def privileged_role_filter(role):
         "Security Operator",
         "Security Reader",
         "User Administrator",
+        "AI Administrator"
     ]
     if role in privileged_groups:
         return True
@@ -156,16 +157,16 @@ def privileged_role_filter(role):
 
 
 def check_new_azure_resource_mappings(
-    existing_role_mappings=[], new_role_mappings=[], headers=[]
+        existing_role_mappings=[], new_role_mappings=[], headers=[]
 ):
     changes = []
     for new_role_mapping in new_role_mappings:
         mapped = False
         for existing_role_mapping in existing_role_mappings:
             if (
-                new_role_mapping["Benutzer"] == existing_role_mapping["Benutzer"]
-                and new_role_mapping["Rolle"] == existing_role_mapping["Rolle"]
-                and new_role_mapping["Scope"] == existing_role_mapping["Scope"]
+                    new_role_mapping["Benutzer"] == existing_role_mapping["Benutzer"]
+                    and new_role_mapping["Rolle"] == existing_role_mapping["Rolle"]
+                    and new_role_mapping["Scope"] == existing_role_mapping["Scope"]
             ):
                 mapped = True
                 break
@@ -182,7 +183,7 @@ def check_new_azure_resource_mappings(
 
 
 def check_removed_azure_resource_mappings(
-    existing_role_mappings=[], new_role_mappings=[]
+        existing_role_mappings=[], new_role_mappings=[]
 ):
     # Use list comprehension to find unmapped role mappings from existing_role_mappings.
     changes = [
@@ -190,9 +191,9 @@ def check_removed_azure_resource_mappings(
         for mapping in existing_role_mappings
         if not any(
             (
-                new_mapping["Benutzer"] == mapping["Benutzer"]
-                and new_mapping["Rolle"] == mapping["Rolle"]
-                and new_mapping["Scope"] == mapping["Scope"]
+                    new_mapping["Benutzer"] == mapping["Benutzer"]
+                    and new_mapping["Rolle"] == mapping["Rolle"]
+                    and new_mapping["Scope"] == mapping["Scope"]
             )
             for new_mapping in new_role_mappings
         )
@@ -247,7 +248,6 @@ def get_azure_resource_role_assignments(subscription_ids, credential):
 
 
 def get_azure_subscriptions(credential=None, filters=None, starts_with=None, dict=False):
-
     client = SubscriptionClient(credential)
     response = client.subscriptions.list()
     if dict:
@@ -283,7 +283,7 @@ def get_azure_subscriptions(credential=None, filters=None, starts_with=None, dic
 
 
 async def build_azure_resource_assignments(
-    role_assignments={}, assignment_dict={}, groups_evaluated=[], graph_client=None
+        role_assignments={}, assignment_dict={}, groups_evaluated=[], graph_client=None
 ):
     for role_assignment in role_assignments:
         if role_assignment["PrincipalType"] == "Group":
