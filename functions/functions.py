@@ -214,36 +214,47 @@ def check_removed_azure_resource_mappings(
 
 
 def get_azure_resource_role_assignments(subscription_ids, credential):
+    from azure.core.exceptions import HttpResponseError
     if isinstance(subscription_ids, str):
         subscription_ids = [subscription_ids]
     results = []
+    failed_subscriptions = []
     for subscription_id in subscription_ids:
-        scope = f"/subscriptions/{subscription_id}"
-        client = AuthorizationManagementClient(credential, subscription_id)
-        assignments = client.role_eligibility_schedule_instances.list_for_scope(scope)
-        for assignment in assignments:
-            expanded = assignment.expanded_properties
-            # end_date_time = assignment.end_date_time or "permanent"
-            result = {
-                "PrincipalName": expanded.principal.display_name,
-                # "PrincipalEmail": expanded.principal.email,
-                "PrincipalType": expanded.principal.type,
-                "PrincipalId": expanded.principal.id,
-                "RoleName": expanded.role_definition.display_name,
-                "RoleType": expanded.role_definition.type,
-                # "RoleId": expanded.role_definition.id,
-                # "ScopeId": expanded.scope.id,
-                "ScopeName": expanded.scope.display_name,
-                "ScopeType": expanded.scope.type,
-                # "Status": assignment.status,
-                # "createdOn": assignment.created_on,
-                # "startDateTime": assignment.start_date_time,
-                # "endDateTime": end_date_time,
-                # "updatedOn": assignment.updated_on,
-                "memberType": assignment.member_type,
-                # "id": assignment.id,
-            }
-            results.append(result)
+        try:
+            scope = f"/subscriptions/{subscription_id}"
+            client = AuthorizationManagementClient(credential, subscription_id)
+            assignments = client.role_eligibility_schedule_instances.list_for_scope(scope)
+            for assignment in assignments:
+                expanded = assignment.expanded_properties
+                # end_date_time = assignment.end_date_time or "permanent"
+                result = {
+                    "PrincipalName": expanded.principal.display_name,
+                    # "PrincipalEmail": expanded.principal.email,
+                    "PrincipalType": expanded.principal.type,
+                    "PrincipalId": expanded.principal.id,
+                    "RoleName": expanded.role_definition.display_name,
+                    "RoleType": expanded.role_definition.type,
+                    # "RoleId": expanded.role_definition.id,
+                    # "ScopeId": expanded.scope.id,
+                    "ScopeName": expanded.scope.display_name,
+                    "ScopeType": expanded.scope.type,
+                    # "Status": assignment.status,
+                    # "createdOn": assignment.created_on,
+                    # "startDateTime": assignment.start_date_time,
+                    # "endDateTime": end_date_time,
+                    # "updatedOn": assignment.updated_on,
+                    "memberType": assignment.member_type,
+                    # "id": assignment.id,
+                }
+                results.append(result)
+        except HttpResponseError as e:
+            logger.error(f"Failed to get role assignments for subscription {subscription_id}: {e.message}")
+            failed_subscriptions.append(subscription_id)
+        except Exception as e:
+            logger.error(f"Unexpected error for subscription {subscription_id}: {str(e)}")
+            failed_subscriptions.append(subscription_id)
+    if failed_subscriptions:
+        logger.warn(f"Failed to process {len(failed_subscriptions)} subscriptions: {', '.join(failed_subscriptions)}")
     return results
 
 
