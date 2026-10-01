@@ -124,4 +124,4 @@ def get_childid(confluence=None, confluence_page_id=None, sub_page_name=None):
 
 def get_tables(confluence=None, confluence_page_id=None):
     tables = confluence.get_tables_from_page(confluence_page_id)
-    return json.loads(tables)
+    return tables
