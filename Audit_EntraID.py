@@ -61,6 +61,10 @@ async def audit_assignments(
     for assignment in assignments:
         role_name = role_dict[assignment.role_definition_id]["display_name"]
         if isinstance(assignment.principal, Group):
+            logger.debug(
+                f"Resolving members of group '{assignment.principal.id}' "
+                f"(role: {role_name})"
+            )
             group_members = await graph_client.get_group_members(
                 assignment.principal.id
             )

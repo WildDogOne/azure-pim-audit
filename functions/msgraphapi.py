@@ -12,6 +12,7 @@ from msgraph.generated.role_management.directory.role_assignments.role_assignmen
     RoleAssignmentsRequestBuilder,
 )
 from kiota_abstractions.base_request_configuration import RequestConfiguration
+from msgraph.generated.models.o_data_errors.o_data_error import ODataError
 from azure.identity.aio import ClientSecretCredential
 from msgraph.generated.role_management.directory.role_assignments.item.unified_role_assignment_item_request_builder import (
     UnifiedRoleAssignmentItemRequestBuilder,
@@ -67,8 +68,17 @@ class GraphAPI:
         request_configuration = RequestConfiguration()
         request_configuration.headers.add("ConsistencyLevel", "eventual")
 
-        result = await self.graph_client.groups.by_group_id(group_id).members.get()
-        return result.value
+        try:
+            result = await self.graph_client.groups.by_group_id(group_id).members.get()
+            return result.value
+        except ODataError as e:
+            if e.response_status_code == 404:
+                logger.warning(
+                    f"Group '{group_id}' not found (likely deleted); "
+                    "skipping its members"
+                )
+                return []
+            raise
 
     async def get_entraid_roles(self):
 
