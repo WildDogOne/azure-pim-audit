@@ -36,6 +36,24 @@ class GraphAPI:
         self.scopes = ["https://graph.microsoft.com/.default"]
         self.graph_client = GraphServiceClient(self.credential, scopes=self.scopes)
 
+    async def close(self):
+        """Release the underlying HTTP resources.
+
+        The async Azure credential uses an aiohttp session and the Graph client
+        uses an httpx.AsyncClient; neither is closed automatically, which logs
+        "Unclosed client session" at exit. Call this in a finally block.
+        """
+        try:
+            await self.credential.close()
+        except Exception:
+            pass
+        try:
+            http_client = getattr(self.graph_client.request_adapter, "_http_client", None)
+            if http_client is not None and hasattr(http_client, "aclose"):
+                await http_client.aclose()
+        except Exception:
+            pass
+
     async def get_role_eligibility_schedules(self):
 
         query_params = RoleEligibilitySchedulesRequestBuilder.RoleEligibilitySchedulesRequestBuilderGetQueryParameters(

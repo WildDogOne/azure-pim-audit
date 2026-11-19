@@ -100,7 +100,10 @@ async def main():
 
     graph_client = build_graph_client()
     confluence = build_confluence()
-    await process_entra_id(graph_client=graph_client, confluence=confluence, args=args)
+    try:
+        await process_entra_id(graph_client=graph_client, confluence=confluence, args=args)
+    finally:
+        await graph_client.close()
 
 
 if __name__ == "__main__":

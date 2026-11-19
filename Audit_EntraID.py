@@ -121,7 +121,10 @@ async def main():
 
     graph_client = build_graph_client()
     confluence = build_confluence()
-    await audit_entraid(graph_client=graph_client, confluence=confluence, args=args)
+    try:
+        await audit_entraid(graph_client=graph_client, confluence=confluence, args=args)
+    finally:
+        await graph_client.close()
 
 
 if __name__ == "__main__":

@@ -183,12 +183,16 @@ async def main():
     graph_client = build_graph_client()
     credential = build_azure_credential()
     confluence = build_confluence()
-    await audit_azure_resources(
-        graph_client=graph_client,
-        confluence=confluence,
-        args=args,
-        credential=credential,
-    )
+    try:
+        await audit_azure_resources(
+            graph_client=graph_client,
+            confluence=confluence,
+            args=args,
+            credential=credential,
+        )
+    finally:
+        await graph_client.close()
+        credential.close()
 
 
 if __name__ == "__main__":
