@@ -1,22 +1,14 @@
 import asyncio
-from kestra import Kestra
-import argparse
-import time
 
+from kestra import Kestra
 
 from creds import (
-    azure_tenant_id,
-    azure_client_id,
-    azure_client_secret,
     confluence_page_id,
-    confluence_token,
-    confluence_url,
     confluence_audit_entraid_page_name,
 )
-from functions.functions import get_assignments
+from functions.cli import build_parser, build_graph_client, build_confluence, timer
+from functions.functions import get_assignments, BENUTZER, ROLLE
 from functions.confluence import confluence_update_page
-from atlassian import Confluence
-from functions.msgraphapi import GraphAPI
 from msgraph.generated.models.group import Group
 
 logger = Kestra.logger()
@@ -39,10 +31,10 @@ def convert_to_common_table(assignment_dict):
     ct = []
     for user in assignment_dict:
         for role in assignment_dict[user]:
-            ct.append({"Benutzer": user, "Rolle": role})
+            ct.append({BENUTZER: user, ROLLE: role})
     ct = sorted(
         ct,
-        key=lambda x: (x["Benutzer"], x["Rolle"]),
+        key=lambda x: (x[BENUTZER], x[ROLLE]),
         reverse=False,
     )
     return ct
@@ -57,7 +49,19 @@ def check_pim(user=None, role=None, pim_assignment_dict=None):
 async def audit_assignments(
     assignments=None, role_dict=None, graph_client=None, pim_assignment_dict=None
 ):
+    # Resolve all group memberships up front, one Graph call per unique group.
+    group_ids = [a.principal.id for a in assignments if isinstance(a.principal, Group)]
+    members_by_group = await graph_client.get_group_members_batch(group_ids)
+
     assignment_dict = {}
+
+    def record(user, role_name):
+        assignment_dict.setdefault(user, [])
+        if not check_pim(
+            user=user, role=role_name, pim_assignment_dict=pim_assignment_dict
+        ):
+            assignment_dict[user].append(role_name)
+
     for assignment in assignments:
         role_name = role_dict[assignment.role_definition_id]["display_name"]
         if isinstance(assignment.principal, Group):
@@ -65,28 +69,10 @@ async def audit_assignments(
                 f"Resolving members of group '{assignment.principal.id}' "
                 f"(role: {role_name})"
             )
-            group_members = await graph_client.get_group_members(
-                assignment.principal.id
-            )
-            if len(group_members) > 0:
-                for group_member in group_members:
-                    member_display_name = group_member.display_name
-                    if member_display_name not in assignment_dict:
-                        assignment_dict[member_display_name] = []
-                    if not check_pim(
-                        user=member_display_name,
-                        role=role_name,
-                        pim_assignment_dict=pim_assignment_dict,
-                    ):
-                        assignment_dict[member_display_name].append(role_name)
+            for group_member in members_by_group.get(assignment.principal.id, []):
+                record(group_member.display_name, role_name)
         else:
-            user = assignment.principal.display_name
-            if user not in assignment_dict:
-                assignment_dict[user] = []
-            if not check_pim(
-                user=user, role=role_name, pim_assignment_dict=pim_assignment_dict
-            ):
-                assignment_dict[user].append(role_name)
+            record(assignment.principal.display_name, role_name)
 
     ct = convert_to_common_table(assignment_dict)
     return ct
@@ -99,13 +85,9 @@ async def audit_entraid(graph_client=None, confluence=None, args=None):
     assignments = await graph_client.get_entraid_role_assignments()
 
     # Get all Current EntraID Role Assignments from Azure PIM
-    start_function = time.perf_counter()
     logger.info("Getting EntraID Role Assignments from Azure PIM")
-    pim_assignment_dict = await get_assignments(graph_client)
-    # Convert the results to a usable table
-    logger.info("Building User Array")
-    end_function = time.perf_counter()
-    Kestra.timer("Load PIM Users", end_function - start_function)
+    with timer("Load PIM Users"):
+        pim_assignment_dict = await get_assignments(graph_client)
 
     ct = await audit_assignments(
         assignments=assignments,
@@ -129,31 +111,19 @@ async def audit_entraid(graph_client=None, confluence=None, args=None):
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        prog="PIM EntraID Role Sync",
-        description="Sync EntraID Role Assignments from Azure PIM to Confluence",
-    )
-    parser.add_argument(
-        "-t",
-        "--test",
-        help="Dryrun the script without writing to Confluence",
-        action="store_true",
+    parser = build_parser(
+        prog="Audit EntraID Active Role Assignments",
+        description="List active EntraID role assignments that are not in PIM",
     )
     args = parser.parse_args()
     if args.test:
         logger.info("Running in Test Mode")
 
-    graph_client = GraphAPI(
-        azure_tenant_id=azure_tenant_id,
-        azure_client_id=azure_client_id,
-        azure_client_secret=azure_client_secret,
-    )
-    confluence = Confluence(url=confluence_url, token=confluence_token)
+    graph_client = build_graph_client()
+    confluence = build_confluence()
     await audit_entraid(graph_client=graph_client, confluence=confluence, args=args)
 
 
 if __name__ == "__main__":
-    start = time.perf_counter()
-    asyncio.run(main())
-    end = time.perf_counter()
-    Kestra.timer("Full Duration", end - start)
+    with timer("Full Duration"):
+        asyncio.run(main())

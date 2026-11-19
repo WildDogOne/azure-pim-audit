@@ -1,5 +1,6 @@
 from msgraph import GraphServiceClient
 from kestra import Kestra
+import asyncio
 
 logger = Kestra.logger()
 from msgraph.generated.role_management.directory.role_eligibility_schedules.role_eligibility_schedules_request_builder import (
@@ -80,6 +81,26 @@ class GraphAPI:
                 return []
             raise
 
+    async def get_group_members_batch(self, group_ids, concurrency=5):
+        """Resolve members for many groups concurrently, de-duplicated.
+
+        Returns {group_id: [members]}. A deleted group yields an empty list
+        (see get_group_members). Replaces the previous one-await-per-group
+        loop, which serialised N Graph round-trips.
+        """
+        unique_ids = list(dict.fromkeys(gid for gid in group_ids if gid))
+        if not unique_ids:
+            return {}
+
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def _fetch(group_id):
+            async with semaphore:
+                return group_id, await self.get_group_members(group_id)
+
+        results = await asyncio.gather(*(_fetch(gid) for gid in unique_ids))
+        return dict(results)
+
     async def get_entraid_roles(self):
 
         result = (
@@ -108,7 +129,6 @@ class GraphAPI:
         result = await self.graph_client.role_management.directory.role_assignments.get(
             request_configuration=request_configuration
         )
-        from pprint import pprint
 
         role_assignments = []
         role_assignments.extend(result.value)

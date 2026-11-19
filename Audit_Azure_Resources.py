@@ -1,58 +1,48 @@
 import asyncio
-from kestra import Kestra
-import argparse
-import time
 import re
 
+from kestra import Kestra
+
 from creds import (
-    azure_tenant_id,
-    azure_client_id,
-    azure_client_secret,
     confluence_page_id,
-    confluence_token,
-    confluence_url,
     confluence_audit_azure_resources_page_name,
     azure_subscription_exclusions,
-    azure_subscription_id_exclustions,
+    azure_subscription_id_exclusions,
     azure_scope_exclusions,
 )
+from functions.cli import (
+    build_parser,
+    build_graph_client,
+    build_confluence,
+    build_azure_credential,
+    timer,
+)
 from functions.confluence import confluence_update_page
-from atlassian import Confluence
-from functions.msgraphapi import GraphAPI
-from msgraph.generated.models.group import Group
-from azure.identity import ClientSecretCredential
 from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
-from functions.functions import get_azure_subscriptions
+from functions.functions import get_azure_subscriptions, BENUTZER, ROLLE, SCOPE
 
 logger = Kestra.logger()
-from pprint import pprint
-
-credential = ClientSecretCredential(
-    azure_tenant_id, azure_client_id, azure_client_secret
-)
 
 
-def query_resource_graph(query=None, subscriptions=None):
+def query_resource_graph(query=None, credential=None, subscriptions=None):
+    if not query:
+        raise ValueError("query_resource_graph requires a non-empty query")
 
     resource_graph_client = ResourceGraphClient(credential)
-    if query:
-        # Set up the query request
-        request_options = QueryRequestOptions(result_format="objectArray")
-        if not subscriptions:
-            query_request = QueryRequest(query=query, options=request_options)
-        else:
-            query_request = QueryRequest(
-                subscriptions=subscriptions, query=query, options=request_options
-            )
+    request_options = QueryRequestOptions(result_format="objectArray")
+    if not subscriptions:
+        query_request = QueryRequest(query=query, options=request_options)
+    else:
+        query_request = QueryRequest(
+            subscriptions=subscriptions, query=query, options=request_options
+        )
 
-        response = resource_graph_client.resources(query_request)
-        print(response)
-        return response.data
+    response = resource_graph_client.resources(query_request)
+    return response.data
 
 
 def subscription_translate(scope=None, subscription_dict=None):
-    print(scope)
     regexp = r"(^\/subscriptions\/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(.*)"
     match = re.search(regexp, scope)
     if match:
@@ -68,7 +58,7 @@ def subscription_translate(scope=None, subscription_dict=None):
     else:
         logger.error("Subscription not found in Azure")
         subscription = subscription_id
-    for exclusion in azure_subscription_id_exclustions:
+    for exclusion in azure_subscription_id_exclusions:
         if exclusion == subscription_id:
             return False
     for exclusion in azure_subscription_exclusions:
@@ -87,7 +77,9 @@ def check_role_exclusions(role):
     return True
 
 
-async def audit_azure_resources(graph_client=None, confluence=None, args=None):
+async def audit_azure_resources(
+    graph_client=None, confluence=None, args=None, credential=None
+):
     query = """
 authorizationresources
 | where type =~ 'microsoft.authorization/roleassignments'
@@ -106,7 +98,8 @@ authorizationresources
 """
     # query = "authorizationresources | limit 10"
 
-    resources = query_resource_graph(query)
+    with timer("Query Resource Graph"):
+        resources = query_resource_graph(query, credential=credential)
     userid_dict = {}
     subscription_dict = get_azure_subscriptions(credential=credential, dict=True)
     entraid_users = await graph_client.get_all_users()
@@ -123,35 +116,44 @@ authorizationresources
             if principalId in userid_dict:
                 ct.append(
                     {
-                        "Benutzer": userid_dict[principalId],
-                        "Rolle": resource["roleName"],
-                        "Scope": scope,
+                        BENUTZER: userid_dict[principalId],
+                        ROLLE: resource["roleName"],
+                        SCOPE: scope,
                     }
                 )
             else:
                 try:
                     group_members = await graph_client.get_group_members(principalId)
-                    if group_members:
-                        for group_member in group_members:
-                            ct.append(
-                                {
-                                    "Benutzer": group_member.display_name,
-                                    "Rolle": resource["roleName"],
-                                    "Scope": scope,
-                                }
-                            )
-                except Exception as e:
-                    logger.error("Cannot Resolve UUID")
+                except Exception:
+                    logger.error(f"Cannot resolve principal UUID {principalId}")
+                    group_members = None
+                if group_members:
+                    for group_member in group_members:
+                        ct.append(
+                            {
+                                BENUTZER: group_member.display_name,
+                                ROLLE: resource["roleName"],
+                                SCOPE: scope,
+                            }
+                        )
+                else:
+                    # Not a resolvable group (service principal, orphaned or
+                    # deleted principal, ...). get_group_members returns [] on
+                    # 404, so without this fallback the principal would be
+                    # silently dropped from the audit.
+                    logger.warning(
+                        f"Principal {principalId} is not a user or resolvable group"
+                    )
                     ct.append(
                         {
-                            "Benutzer": principalId,
-                            "Rolle": resource["roleName"],
-                            "Scope": scope,
+                            BENUTZER: principalId,
+                            ROLLE: resource["roleName"],
+                            SCOPE: scope,
                         }
                     )
     ct = sorted(
         ct,
-        key=lambda x: (x["Benutzer"], x["Rolle"]),
+        key=lambda x: (x[BENUTZER], x[ROLLE]),
         reverse=False,
     )
 
@@ -170,36 +172,25 @@ authorizationresources
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        prog="PIM EntraID Role Sync",
-        description="Sync EntraID Role Assignments from Azure PIM to Confluence",
-    )
-    parser.add_argument(
-        "-t",
-        "--test",
-        help="Dryrun the script without writing to Confluence",
-        action="store_true",
+    parser = build_parser(
+        prog="Audit Azure Resources Active Role Assignments",
+        description="List active Azure resource role assignments that are not in PIM",
     )
     args = parser.parse_args()
     if args.test:
         logger.info("Running in Test Mode")
 
-    graph_client = GraphAPI(
-        azure_tenant_id=azure_tenant_id,
-        azure_client_id=azure_client_id,
-        azure_client_secret=azure_client_secret,
-    )
-
-    confluence = Confluence(url=confluence_url, token=confluence_token)
+    graph_client = build_graph_client()
+    credential = build_azure_credential()
+    confluence = build_confluence()
     await audit_azure_resources(
         graph_client=graph_client,
         confluence=confluence,
         args=args,
+        credential=credential,
     )
 
 
 if __name__ == "__main__":
-    start = time.perf_counter()
-    asyncio.run(main())
-    end = time.perf_counter()
-    Kestra.timer("Full Duration", end - start)
+    with timer("Full Duration"):
+        asyncio.run(main())

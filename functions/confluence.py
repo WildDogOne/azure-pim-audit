@@ -1,8 +1,8 @@
 import pandas as pd
-import datetime
-from datetime import datetime
 from atlassian import Confluence
-import json
+from kestra import Kestra
+
+logger = Kestra.logger()
 
 
 def bulletpointer(data):
@@ -75,11 +75,10 @@ def confluence_update_page(
                 full_width=full_width,
             )
     else:
-        print("Missing confluence parameters")
-        print("title:", title)
-        print("parent_id:", parent_id)
-        print("information:", table)
-        print("confluence:", confluence)
+        logger.error(
+            "Missing confluence parameters "
+            f"(title={title!r}, parent_id={parent_id!r}, confluence={confluence!r})"
+        )
         return False
 
 
@@ -110,7 +109,7 @@ def cleanup_children(
                 confluence_page_id = child["id"]
     children = confluence.get_page_child_by_type(confluence_page_id, type="page")
     for child in children:
-        print(f"Removing {child['title']}")
+        logger.info(f"Removing {child['title']}")
         confluence.remove_page(child["id"], status=None, recursive=False)
 
 

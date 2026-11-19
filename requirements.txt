@@ -1,10 +1,17 @@
-azure-identity
-azure-mgmt-authorization
-azure-mgmt-subscription
-tabulate
-msgraph-sdk
-atlassian-python-api
-pandas
-lxml
-kestra
-azure-mgmt-resourcegraph
+# Compatible-release floors (verified on Python 3.14 in .venv). Kept open
+# enough to resolve in the Kestra pydata image, which may run a different
+# interpreter. msgraph-sdk is pinned to patch releases only because its
+# request-builder import paths move between minor versions.
+azure-identity~=1.25
+azure-mgmt-authorization~=4.0
+azure-mgmt-subscription~=3.1
+azure-mgmt-resourcegraph~=8.0
+msgraph-sdk~=1.63.0
+atlassian-python-api~=5.0
+pandas~=3.0
+lxml~=6.1
+kestra~=2.0
+tabulate~=0.10
+
+# Test-only (run: pytest)
+pytest~=9.2

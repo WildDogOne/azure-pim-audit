@@ -9,7 +9,10 @@ confluence_audit_azure_resources_page_name = "Audit: Azure Resources Active Role
 
 
 azure_subscription_exclusions = ["Developer"]
-azure_subscription_id_exclustions = []
+azure_subscription_id_exclusions = []
+# Role/scope names to exclude from the Azure resource audit (matched as
+# substrings against the role name).
+azure_scope_exclusions = ["Desktop Virtualization User"]
 
 # Azure Config
 azure_tenant_id = (

@@ -1,4 +1,3 @@
-import json
 from kestra import Kestra
 
 logger = Kestra.logger()
@@ -7,38 +6,43 @@ from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.subscription import SubscriptionClient
 from msgraph.generated.models.group import Group
 from functions.confluence import (
-    confluence_update_page,
-    style_text,
     get_childid,
-    convert_to_html_table,
     get_tables,
 )
 
+# Row keys must match the Confluence page headers exactly; the diff logic
+# compares rows on these tuples. Define them once so a typo is a visible
+# constant change rather than a silent key error or mis-diff.
+BENUTZER = "Benutzer"
+ROLLE = "Rolle"
+SCOPE = "Scope"
+ENTRAID_KEYS = (BENUTZER, ROLLE)
+AZURE_KEYS = (BENUTZER, ROLLE, SCOPE)
+
 
 async def get_assignments(pim):
-    assignment_dict = {}
     assignments = await pim.get_role_eligibility_schedules()
 
+    # Resolve all group memberships up front, one Graph call per unique group.
+    group_ids = [a.principal.id for a in assignments if isinstance(a.principal, Group)]
+    members_by_group = await pim.get_group_members_batch(group_ids)
+
+    assignment_dict = {}
     for assignment in assignments:
-        principal = assignment.principal
         role = assignment.role_definition.display_name
-        principal_display_name = assignment.principal.display_name
         if isinstance(assignment.principal, Group):
-            logger.debug(f"Group: {principal_display_name} is assigned to {role}")
-            group_id = principal.id
-            group_members = await pim.get_group_members(group_id)
-            if len(group_members) > 0:
-                for group_member in group_members:
-                    member_display_name = group_member.display_name
-                    if role not in assignment_dict:
-                        assignment_dict[role] = [member_display_name]
-                    else:
-                        assignment_dict[role].append(member_display_name)
+            logger.debug(
+                f"Group: {assignment.principal.display_name} is assigned to {role}"
+            )
+            members = members_by_group.get(assignment.principal.id, [])
+            names = [member.display_name for member in members]
         else:
-            if role not in assignment_dict:
-                assignment_dict[role] = [principal_display_name]
-            else:
-                assignment_dict[role].append(principal_display_name)
+            names = [assignment.principal.display_name]
+
+        bucket = assignment_dict.setdefault(role, [])
+        for name in names:
+            if name not in bucket:
+                bucket.append(name)
     return assignment_dict
 
 
@@ -55,7 +59,7 @@ def build_user_array(assignment_dict):
     user_array = []
     for user in user_roles:
         for role in user_roles[user]:
-            user_array.append({"Benutzer": user, "Rolle": role})
+            user_array.append({BENUTZER: user, ROLLE: role})
     return user_array
 
 
@@ -75,49 +79,71 @@ def get_documented_mappings(confluence, confluence_page_id, sub_page_name):
     return role_mappings, headers
 
 
-def check_new_mappings(user_array, role_mappings, headers):
+def ensure_documented_columns(headers, keys, page_name):
+    """Fail loudly when an existing Confluence table is missing key columns.
+
+    A renamed or deleted header would otherwise make every documented row look
+    stale (its key columns resolve to empty strings), so the diff would silently
+    delete and re-add the whole table - including any manual columns - and write
+    that to the live page. An empty page (no headers) is fine and left alone.
+    """
+    if headers and not all(k in headers for k in keys):
+        missing = [k for k in keys if k not in headers]
+        raise ValueError(
+            f"Confluence page '{page_name}' table is missing expected column(s) "
+            f"{missing}; found headers {headers}. Refusing to sync to avoid "
+            "wiping existing rows."
+        )
+
+
+def _row_key(row, keys):
+    """Stable comparison key for a row over the given columns."""
+    return tuple(row.get(k, "") for k in keys)
+
+
+def diff_add(new_rows, existing_rows, headers, keys):
+    """Append rows from new_rows not already present in existing_rows.
+
+    Returns (existing_rows, changes) where changes is the list of added rows,
+    or False when nothing was added.
+    """
+    existing_keys = {_row_key(row, keys) for row in existing_rows}
     changes = []
-    for exported_role in user_array:
-        mapped = False
-        for existing_mapping in role_mappings:
-            if (
-                    exported_role["Benutzer"] == existing_mapping["Benutzer"]
-                    and exported_role["Rolle"] == existing_mapping["Rolle"]
-            ):
-                mapped = True
-                break
-        if not mapped:
+    for row in new_rows:
+        key = _row_key(row, keys)
+        if key not in existing_keys:
             for header in headers:
-                if header not in exported_role:
-                    exported_role[header] = ""
-            print(f"New mapping: {exported_role}")
-            role_mappings.append(exported_role)
-            changes.append(exported_role)
-    if len(changes) < 1:
-        changes = False
-    return role_mappings, changes
+                row.setdefault(header, "")
+            logger.info(f"New mapping: {row}")
+            existing_rows.append(row)
+            existing_keys.add(key)
+            changes.append(row)
+    return existing_rows, (changes or False)
+
+
+def diff_remove(new_rows, existing_rows, keys):
+    """Drop rows from existing_rows that no longer appear in new_rows.
+
+    Comparison is on the key columns only, so extra columns (e.g. a manual
+    notes column on the wiki page) do not affect the match, and identical rows
+    are all kept or all removed consistently. Returns (remaining, changes).
+    """
+    new_keys = {_row_key(row, keys) for row in new_rows}
+    changes = [row for row in existing_rows if _row_key(row, keys) not in new_keys]
+    if changes:
+        remaining = [row for row in existing_rows if _row_key(row, keys) in new_keys]
+        for change in changes:
+            logger.info(f"Removed mapping: {change}")
+        return remaining, changes
+    return existing_rows, False
+
+
+def check_new_mappings(user_array, role_mappings, headers):
+    return diff_add(user_array, role_mappings, headers, ENTRAID_KEYS)
 
 
 def check_removed_mappings(user_array, role_mappings):
-    changes = []
-
-    # Collect mappings to be removed
-    for existing_mapping in [mapping for mapping in role_mappings]:
-        if not any(
-                exported_role["Benutzer"] == existing_mapping["Benutzer"]
-                and exported_role["Rolle"] == existing_mapping["Rolle"]
-                for exported_role in user_array
-        ):
-            print(f"Mapping not found: {existing_mapping}")
-            changes.append(existing_mapping)
-
-    # Filter out mappings that are no longer needed
-    role_mappings = [mapping for mapping in role_mappings if mapping not in changes]
-
-    if len(changes) == 0:
-        changes = False
-
-    return role_mappings, changes
+    return diff_remove(user_array, role_mappings, ENTRAID_KEYS)
 
 
 def privileged_role_filter(role):
@@ -159,58 +185,13 @@ def privileged_role_filter(role):
 def check_new_azure_resource_mappings(
         existing_role_mappings=[], new_role_mappings=[], headers=[]
 ):
-    changes = []
-    for new_role_mapping in new_role_mappings:
-        mapped = False
-        for existing_role_mapping in existing_role_mappings:
-            if (
-                    new_role_mapping["Benutzer"] == existing_role_mapping["Benutzer"]
-                    and new_role_mapping["Rolle"] == existing_role_mapping["Rolle"]
-                    and new_role_mapping["Scope"] == existing_role_mapping["Scope"]
-            ):
-                mapped = True
-                break
-        if not mapped:
-            for header in headers:
-                if header not in new_role_mapping:
-                    new_role_mapping[header] = ""
-            print(f"New mapping: {new_role_mapping}")
-            existing_role_mappings.append(new_role_mapping)
-            changes.append(new_role_mapping)
-    if len(changes) < 1:
-        changes = False
-    return existing_role_mappings, changes
+    return diff_add(new_role_mappings, existing_role_mappings, headers, AZURE_KEYS)
 
 
 def check_removed_azure_resource_mappings(
         existing_role_mappings=[], new_role_mappings=[]
 ):
-    # Use list comprehension to find unmapped role mappings from existing_role_mappings.
-    changes = [
-        mapping
-        for mapping in existing_role_mappings
-        if not any(
-            (
-                    new_mapping["Benutzer"] == mapping["Benutzer"]
-                    and new_mapping["Rolle"] == mapping["Rolle"]
-                    and new_mapping["Scope"] == mapping["Scope"]
-            )
-            for new_mapping in new_role_mappings
-        )
-    ]
-
-    # If there are changes, remove the unmapped role mappings from existing_role_mappings.
-    if changes:
-        for change in changes:
-            print(f"Removed mapping: {change}")
-            existing_role_mappings.remove(change)
-
-        # Return updated lists
-        return existing_role_mappings, changes
-
-    else:
-        # No changes to report
-        return existing_role_mappings, False
+    return diff_remove(new_role_mappings, existing_role_mappings, AZURE_KEYS)
 
 
 def get_azure_resource_role_assignments(subscription_ids, credential):
@@ -254,7 +235,7 @@ def get_azure_resource_role_assignments(subscription_ids, credential):
             logger.error(f"Unexpected error for subscription {subscription_id}: {str(e)}")
             failed_subscriptions.append(subscription_id)
     if failed_subscriptions:
-        logger.warn(f"Failed to process {len(failed_subscriptions)} subscriptions: {', '.join(failed_subscriptions)}")
+        logger.warning(f"Failed to process {len(failed_subscriptions)} subscriptions: {', '.join(failed_subscriptions)}")
     return results
 
 
@@ -294,33 +275,47 @@ def get_azure_subscriptions(credential=None, filters=None, starts_with=None, dic
 
 
 async def build_azure_resource_assignments(
-        role_assignments={}, assignment_dict={}, groups_evaluated=[], graph_client=None
+        role_assignments=None, assignment_dict=None, groups_evaluated=None, graph_client=None
 ):
+    if assignment_dict is None:
+        assignment_dict = {}
+    if groups_evaluated is None:
+        groups_evaluated = {}
+
+    # Resolve all group memberships up front, one Graph call per unique group.
+    # Caching the members (not the group id) lets a group assigned to several
+    # scope/role pairs expand into each of them, which the old per-group-id
+    # cache silently dropped after the first occurrence.
+    group_ids = [
+        ra["PrincipalId"]
+        for ra in role_assignments
+        if ra["PrincipalType"] == "Group"
+    ]
+    members_by_group = await graph_client.get_group_members_batch(group_ids)
+    groups_evaluated.update(members_by_group)
+
     for role_assignment in role_assignments:
+        scope = role_assignment["ScopeName"]
+        role = role_assignment["RoleName"]
+
         if role_assignment["PrincipalType"] == "Group":
-            if role_assignment["ScopeName"] not in assignment_dict:
-                assignment_dict[role_assignment["ScopeName"]] = {}
+            members = members_by_group.get(role_assignment["PrincipalId"], [])
+            names = [member.display_name for member in members]
+        elif role_assignment["PrincipalType"] == "User":
+            # Direct user principal. This branch was previously missing, so
+            # users PIM-eligible at a scope directly never reached the table.
+            names = [role_assignment["PrincipalName"]]
+        else:
+            # Service principals, managed identities, directory roles, etc.
+            # are not "Benutzer" (users); skip them to keep the page to humans.
+            continue
 
-            # Extract the elements for the new format
-            username = None
-            scope = role_assignment["ScopeName"]
-            role = role_assignment["RoleName"]
+        if not names:
+            continue
 
-            if role_assignment["PrincipalId"] not in groups_evaluated:
-                group_members = await graph_client.get_group_members(
-                    role_assignment["PrincipalId"]
-                )
-                groups_evaluated.append(role_assignment["PrincipalId"])
-                if len(group_members) > 0:
+        bucket = assignment_dict.setdefault(scope, {}).setdefault(role, [])
+        for name in names:
+            if name not in bucket:
+                bucket.append(name)
 
-                    # Add the extracted elements to the dictionary
-                    if scope not in assignment_dict:
-                        assignment_dict[scope] = {}
-
-                    if role not in assignment_dict[scope]:
-                        assignment_dict[scope][role] = []
-                    for group_member in group_members:
-                        user_display_name = group_member.display_name
-                        if user_display_name not in assignment_dict[scope][role]:
-                            assignment_dict[scope][role].append(user_display_name)
     return assignment_dict, groups_evaluated
